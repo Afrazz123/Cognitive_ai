@@ -124,5 +124,6 @@ def test_image_against_memory(image_path):
 # ========= USAGE =========
 if __name__ == "__main__":
     test_image_against_memory(
-        image_path="human3.jpg"
+        image_path="write image path"
     )
+
