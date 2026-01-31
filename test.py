@@ -8,7 +8,6 @@ MEMORY_FILE = "memory.jsonl"
 # ----------------------------
 
 
-# ========= ELECTRIC BINARY FLOW =========
 def extract_raw_binary_flow(file_path, threshold=THRESHOLD):
     with open(file_path, "rb") as f:
         data = f.read()
@@ -19,7 +18,6 @@ def extract_raw_binary_flow(file_path, threshold=THRESHOLD):
     ]
 
 
-# ========= LOAD MEMORY (JSONL) =========
 def load_memory(memory_file):
     samples = []
     if not os.path.exists(memory_file):
@@ -29,21 +27,17 @@ def load_memory(memory_file):
         for line in f:
             if line.strip():
                 samples.append(json.loads(line))
-
     return samples
 
 
-# ========= SAVE TO MEMORY =========
 def save_to_memory(label, binary_flow):
-    record = {
-        "label": label,
-        "binary_flow": binary_flow
-    }
     with open(MEMORY_FILE, "a") as f:
-        f.write(json.dumps(record) + "\n")
+        f.write(json.dumps({
+            "label": label,
+            "binary_flow": binary_flow
+        }) + "\n")
 
 
-# ========= COSINE SIMILARITY (BINARY) =========
 def cosine_similarity_binary(a, b):
     length = min(len(a), len(b))
     if length == 0:
@@ -64,7 +58,6 @@ def cosine_similarity_binary(a, b):
     return dot / (math.sqrt(mag_a) * math.sqrt(mag_b))
 
 
-# ========= TEST + SELF CORRECT =========
 def test_image_against_memory(image_path):
     memory = load_memory(MEMORY_FILE)
 
@@ -72,27 +65,29 @@ def test_image_against_memory(image_path):
         print("❌ Memory is empty")
         return
 
-    # Step 1: extract flow
     input_binary = extract_raw_binary_flow(image_path)
 
-    # Step 2: score per label
     label_scores = {}
+    best_score = -1.0
+    best_label = None
+    best_match_index = None
 
-    for record in memory:
-        label = record["label"]
+    for idx, record in enumerate(memory):
         sim = cosine_similarity_binary(
             input_binary,
             record["binary_flow"]
         )
 
+        label = record["label"]
+
+        if sim > best_score:
+            best_score = sim
+            best_label = label
+            best_match_index = idx
+
         if label not in label_scores or sim > label_scores[label]:
             label_scores[label] = sim
 
-    # Step 3: best match
-    best_label = max(label_scores, key=label_scores.get)
-    best_score = label_scores[best_label]
-
-    # Step 4: report
     print("\n===== TEST RESULT =====")
     print(f"Input image : {image_path}")
     print("\nSimilarity per label:")
@@ -105,25 +100,45 @@ def test_image_against_memory(image_path):
     print(f"  Predicted as → {best_label}")
     print(f"  Confidence   → {best_score:.3f}")
 
-    # ========= FEEDBACK LOOP =========
+    # ========= FEEDBACK LOOP (FIXED) =========
     answer = input("\nIs this prediction correct? (y/n): ").strip().lower()
 
     if answer == "y":
-        print("✅ Confirmed. Memory remains unchanged.")
+        if best_score < 1.0:
+            save_to_memory(best_label, input_binary)
+            print(
+                f"🧠 Reinforced memory → '{best_label}' "
+                f"(confidence {best_score:.3f})"
+            )
+        else:
+            print(
+                "✅ Perfect confidence (1.0). "
+                "No memory update."
+            )
         return
 
     if answer == "n":
         correct_label = input("Enter correct label: ").strip()
-        save_to_memory(correct_label, input_binary)
-        print(f"🧠 Memory updated with new understanding → '{correct_label}'")
+
+        if best_score == 1.0:
+            memory[best_match_index]["label"] = correct_label
+            with open(MEMORY_FILE, "w") as f:
+                for rec in memory:
+                    f.write(json.dumps(rec) + "\n")
+
+            print(
+                f"🧠 Corrected label → "
+                f"'{best_label}' → '{correct_label}'"
+            )
+        else:
+            save_to_memory(correct_label, input_binary)
+            print(
+                f"🧠 New understanding added → '{correct_label}'"
+            )
         return
 
     print("⚠ Invalid input. Skipping learning.")
 
 
-# ========= USAGE =========
 if __name__ == "__main__":
-    test_image_against_memory(
-        image_path="write image path"
-    )
-
+    test_image_against_memory("image_path")
