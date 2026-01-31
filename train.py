@@ -85,8 +85,9 @@ def save_recursive_folder_memory_realtime(
 
 
 save_recursive_folder_memory_realtime(
-    root_folder="afraz",
-    label="afraz.jpg",
+    root_folder="Write folder name",
+    label="Write label",
     memory_jsonl="memory.jsonl",
     threshold=5
 )
+
